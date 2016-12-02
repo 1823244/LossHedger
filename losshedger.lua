@@ -91,6 +91,7 @@ function OnInit(s)
 	maintable:createOwnTable("LOSS HEDGER")
 	maintable:showTable()
 	
+	--service row.
 	local row = maintable.t:AddLine()
 	maintable.t:SetValue(row, "p_account",    'START')
 	maintable.t:SetValue(row, "p_sec_code",    'STOP')
@@ -102,7 +103,6 @@ function DestroyTables()
 	is_run = false
 	DestroyTable(maintable.t.t_id)
 end
-
 
 function OnStop(s)
   DestroyTables()
@@ -123,38 +123,52 @@ function OnTrade(trade)
 		local comment = helper:get_deal_comment(trade.brokerref)
 		
 		if comment == 'second' then
+		
+			--данная функция сработает также и на вторичную сделку. просто выведем ее в лог
 			add_sec_trade(trade)
+			
 		else
 		
 			--message(trade.trade_num)
 			
+			--Добавить в лог сделку по первичному счету
 			add_prim_trade(trade)
 			
+			
+			
+			--------------------------------------------------------------
+			--Создание вторичной сделки
+			--------------------------------------------------------------
+			
+			--определить тип операции для вторичной сделки
 			local new_oper = ''
 			if helper:what_is_the_direction(trade) == 'sell' then
 				new_oper = 'B'
 			else
 				new_oper = 'S'
 			end
-			local depo = 'NL0011100043'
+			
+			
 			
 			--get price
 			
 			
-			local minStepPrice = getParamEx(trade.class_code, trade.sec_code, "SEC_PRICE_STEP").param_value + 0
-			--local STEPPRICET = getParamEx(trade.class_code, trade.sec_code, "STEPPRICET").param_value + 0
+			local minStepPrice = getParamEx(trade.class_code, trade.sec_code, "SEC_PRICE_STEP").param_value
+			--local STEPPRICET = getParamEx(trade.class_code, trade.sec_code, "STEPPRICET").param_value 
 			  if minStepPrice == nil or tonumber(minStepPrice) == 0 then
 				message("\208\157\208\181\209\130 \208\188\208\184\208\189\208\184\208\188\208\176\208\187\209\140\208\189\208\190\208\179\208\190 \209\136\208\176\208\179\208\176 \209\134\208\181\208\189\209\139 \208\178 \208\154\208\178\208\184\208\186\208\181. \208\148\208\190\208\177\208\176\208\178\209\140\209\130\208\181 \208\181\208\179\208\190 \208\178 \209\130\208\176\208\177\208\187\208\184\209\134\209\131 \208\184\208\189\209\129\209\130\209\128\209\131\208\188\208\181\208\189\209\130\208\190\208\178", 2)
 				return
 			  end
+			  --[[
 			  local lotSize = getParamEx(trade.class_code, trade.sec_code, "LOTSIZE").param_value + 0
 			  if lotSize == nil or tonumber(lotSize) == 0 then
 				message("\208\157\208\181\209\130 \209\128\208\176\208\183\208\188\208\181\209\128\208\176 \208\187\208\190\209\130\208\176 \208\178 \208\154\208\178\208\184\208\186\208\181. \208\148\208\190\208\177\208\176\208\178\209\140\209\130\208\181 \208\181\208\179\208\190 \208\178 \209\130\208\176\208\177\208\187\208\184\209\134\209\131 \208\184\208\189\209\129\209\130\209\128\209\131\208\188\208\181\208\189\209\130\208\190\208\178", 2)
 				return
 			  end
+			 --]] 
 			  
-			  local last = getParamEx(trade.class_code, trade.sec_code, "LAST").param_value + 0
-			  --message(last)
+			--определим новую цену для вторичной сделки, относительно LAST  
+			local last = getParamEx(trade.class_code, trade.sec_code, "LAST").param_value + 0
 			
 			local price = 0
 			if new_oper == 'B' then
@@ -162,7 +176,14 @@ function OnTrade(trade)
 			else
 				price = tonumber(last) - 60 * minStepPrice
 			end
-			transactions:order(trade.sec_code, trade.class_code, new_oper, trade.client_code, depo, price, trade.qty*2, 'second')
+			
+			--определим новое количество. это может быть более сложный алгоритм, чем сейчас
+			local new_qty = 0
+			
+			new_qty = trade.qty*2
+			
+			--отправили заявку
+			transactions:order(trade.sec_code, trade.class_code, new_oper, settings.secondary_client_code, settings.secondary_depo_account, price, new_qty, 'second')
 			
 		end
 		
